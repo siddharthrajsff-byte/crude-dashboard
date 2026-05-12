@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .eia_client import DATA_RAW_DIR, fetch_series, save_parquet
+from .wpsr_client import fetch_all_wpsr
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,17 @@ def fetch_all() -> dict[str, int]:
 
     _write_processed(counts)
     return counts
+
+
+def fetch_all_now() -> dict:
+    """
+    Manual refresh: run WPSR first (latest week), then API v2 (historical).
+    Called by the dashboard Refresh button.
+    Returns combined result dict.
+    """
+    wpsr_results = fetch_all_wpsr()
+    api_results = fetch_all()
+    return {"wpsr": wpsr_results, "api_v2": api_results}
 
 
 def _write_processed(counts: dict[str, int]) -> None:

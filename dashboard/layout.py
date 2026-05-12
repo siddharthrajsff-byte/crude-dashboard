@@ -57,6 +57,7 @@ def build_layout() -> html.Div:
         children=[
             dcc.Store(id="data-loaded", data=False),
             dcc.Interval(id="initial-load", interval=300, n_intervals=0, max_intervals=1),
+            dcc.Interval(id="scheduler-status-interval", interval=5000, n_intervals=0),
 
             # Accent top strip
             html.Div(style={"height": "3px", "backgroundColor": COLORS["accent"]}),
@@ -95,6 +96,8 @@ def build_layout() -> html.Div:
                     ]),
                 ],
             ),
+
+            html.Div(id="scheduler-status-bar"),
 
             html.Div(
                 style={"padding": "16px"},

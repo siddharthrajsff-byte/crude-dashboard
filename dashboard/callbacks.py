@@ -15,7 +15,8 @@ from dashboard.charts import inventory, production, refinery, spread
 from dashboard.charts.signals import signal_panel
 from dashboard.theme import COLORS
 from db.query import data_exists, load_all
-from ingestion.fetch_all import fetch_all, last_updated
+from ingestion.fetch_all import fetch_all_now, last_updated
+from ingestion.scheduler_status import get_status
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,145 @@ def _gauge(zscore_value: float | None) -> html.Div:
     )
 
 
+def _format_status_time(value: str | None) -> str:
+    if not value:
+        return "—"
+    try:
+        return datetime.fromisoformat(value).strftime("%a %H:%M ET")
+    except ValueError:
+        return value
+
+
+def _status_badge(state: str) -> dmc.Badge:
+    palette = {
+        "running": (COLORS["accent"], "#332214", "Running"),
+        "success": (COLORS["bull"], "#0f2a1d", "Complete"),
+        "error": (COLORS["bear"], "#2a0f0f", "Failed"),
+        "idle": (COLORS["text_muted"], "#222", "Idle"),
+    }
+    fg, bg, label = palette.get(state, palette["idle"])
+    return dmc.Badge(
+        label,
+        variant="filled",
+        radius="sm",
+        styles={"root": {"backgroundColor": bg, "color": fg, "border": f"1px solid {fg}"}},
+    )
+
+
+def _job_status_chip(job: dict) -> dmc.Card:
+    state = job.get("state", "idle")
+    border = COLORS["accent"] if state == "running" else COLORS["bear"] if state == "error" else COLORS["border"]
+    caption = job.get("message") or "Waiting for next run."
+    if state in {"idle", "success"}:
+        caption = f"Next: {_format_status_time(job.get('next_run_at'))}"
+    if state == "success" and job.get("finished_at"):
+        caption = f"Last complete: {_format_status_time(job.get('finished_at'))}"
+
+    return dmc.Card(
+        withBorder=True,
+        radius="md",
+        padding="xs",
+        style={
+            "backgroundColor": COLORS["bg"],
+            "borderColor": border,
+            "minWidth": "260px",
+        },
+        children=[
+            dmc.Group(
+                justify="space-between",
+                align="center",
+                gap="xs",
+                children=[
+                    dmc.Text(job.get("label", "Scheduled job"), c=COLORS["text"], size="xs", fw=700),
+                    _status_badge(state),
+                ],
+            ),
+            dmc.Text(caption, c=COLORS["text_muted"], size="xs", mt=4),
+        ],
+    )
+
+
+def _scheduler_status_bar(status: dict) -> html.Div:
+    jobs = status.get("jobs", {})
+    running_jobs = [job for job in jobs.values() if job.get("state") == "running"]
+    error_jobs = [job for job in jobs.values() if job.get("state") == "error"]
+
+    if running_jobs:
+        headline = running_jobs[0].get("message", "Scheduled data refresh in progress.")
+        color = COLORS["accent"]
+        bg = "#2d2118"
+        loader = dmc.Loader(size="xs", color="orange")
+    elif error_jobs:
+        headline = error_jobs[0].get("message", "Scheduled data refresh failed.")
+        color = COLORS["bear"]
+        bg = "#2a1515"
+        loader = html.Span()
+    elif status.get("scheduler_running"):
+        headline = "Scheduled data refresh is armed. WPSR runs at 10:30 ET; EIA API backfill runs at 11:30 ET."
+        color = COLORS["bull"]
+        bg = "#14241c"
+        loader = html.Span()
+    else:
+        headline = "Scheduler status unavailable until the dashboard process starts APScheduler."
+        color = COLORS["neutral"]
+        bg = "#20232a"
+        loader = html.Span()
+
+    ordered_jobs = [
+        jobs[key]
+        for key in ("wpsr_realtime_refresh", "eia_api_historical_refresh")
+        if key in jobs
+    ]
+
+    return html.Div(
+        style={
+            "backgroundColor": bg,
+            "borderBottom": f"1px solid {COLORS['border']}",
+            "boxShadow": "0 8px 24px rgba(0,0,0,0.18)",
+            "padding": "10px 16px",
+        },
+        children=[
+            dmc.Group(
+                justify="space-between",
+                align="center",
+                gap="sm",
+                children=[
+                    dmc.Group(gap="xs", align="center", children=[
+                        loader,
+                        html.Div(
+                            style={
+                                "width": "8px",
+                                "height": "8px",
+                                "borderRadius": "50%",
+                                "backgroundColor": color,
+                                "boxShadow": f"0 0 12px {color}",
+                            }
+                        ),
+                        dmc.Text(headline, c=COLORS["text"], size="sm", fw=600),
+                    ]),
+                    dmc.Text(
+                        f"Status checked: {_format_status_time(status.get('updated_at'))}",
+                        c=COLORS["text_muted"],
+                        size="xs",
+                    ),
+                ],
+            ),
+            dmc.Space(h="xs"),
+            dmc.Group(gap="sm", children=[_job_status_chip(job) for job in ordered_jobs]),
+        ],
+    )
+
+
 # ---- callbacks ------------------------------------------------------------
+
+
+@callback(
+    Output("scheduler-status-bar", "children"),
+    Input("scheduler-status-interval", "n_intervals"),
+    prevent_initial_call=False,
+)
+def render_scheduler_status(_n_intervals):
+    return _scheduler_status_bar(get_status())
 
 
 @callback(
@@ -126,12 +265,12 @@ def load_or_refresh(_n_intervals, n_clicks, loaded):
     trigger = ctx.triggered_id
     if trigger == "refresh-btn" and n_clicks:
         try:
-            fetch_all()
+            fetch_all_now()
         except Exception as e:
             logger.exception("Refresh failed: %s", e)
     elif not data_exists():
         try:
-            fetch_all()
+            fetch_all_now()
         except Exception as e:
             logger.exception("Initial fetch failed: %s", e)
 
