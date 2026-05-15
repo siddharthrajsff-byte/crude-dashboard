@@ -46,6 +46,104 @@ def _chart_card(graph_id: str, height: int = 320) -> dmc.Card:
     )
 
 
+def _overview_tab_content() -> list:
+    return [
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_metric_card("metric-cushing"), span=2),
+            dmc.GridCol(_metric_card("metric-production"), span=2),
+            dmc.GridCol(_metric_card("metric-refinery"), span=2),
+            dmc.GridCol(_metric_card("metric-exports"), span=2),
+            dmc.GridCol(_metric_card("metric-spread"), span=2),
+            dmc.GridCol(_metric_card("metric-zscore"), span=2),
+        ]),
+        dmc.Space(h="md"),
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_chart_card("chart-cushing-5yr"), span=4),
+            dmc.GridCol(_chart_card("chart-cushing-wow"), span=4),
+            dmc.GridCol(_chart_card("chart-production"), span=4),
+        ]),
+        dmc.Space(h="md"),
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_chart_card("chart-refinery"), span=3),
+            dmc.GridCol(_chart_card("chart-exports"), span=3),
+            dmc.GridCol(_chart_card("chart-crack"), span=3),
+            dmc.GridCol(_chart_card("chart-demand"), span=3),
+        ]),
+        dmc.Space(h="md"),
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_chart_card("chart-spr-stocks"), span=6),
+            dmc.GridCol(_chart_card("chart-crude-imports"), span=6),
+        ]),
+        dmc.Space(h="md"),
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_chart_card("chart-spread-seasonal", height=340), span=6),
+            dmc.GridCol(
+                html.Div(children=[
+                    _chart_card("chart-zscore", height=260),
+                    dmc.Space(h="xs"),
+                    dmc.Card(
+                        withBorder=True, radius="md", padding="sm",
+                        style={
+                            "backgroundColor": COLORS["surface"],
+                            "borderColor": COLORS["border"],
+                        },
+                        children=[
+                            dmc.Text(
+                                "Current z-score position",
+                                c=COLORS["text_muted"], size="xs", mb=4,
+                            ),
+                            html.Div(id="zscore-gauge"),
+                        ],
+                    ),
+                ]),
+                span=6,
+            ),
+        ]),
+        dmc.Space(h="md"),
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_chart_card("chart-calendar-spreads", height=260), span=6),
+            dmc.GridCol(_chart_card("chart-clco-expiry", height=260), span=6),
+        ]),
+        dmc.Space(h="md"),
+        html.Div(id="signal-panel"),
+    ]
+
+
+def _fca_tab_content() -> list:
+    return [
+        dmc.Grid(gutter="md", children=[
+            dmc.GridCol(_metric_card("metric-fca-outrights"), span=4),
+            dmc.GridCol(_metric_card("metric-fca-spreads"), span=4),
+            dmc.GridCol(_metric_card("metric-fca-butterflies"), span=4),
+        ]),
+        dmc.Space(h="md"),
+        html.Div(
+            style={
+                "display": "grid",
+                "gridTemplateColumns": "repeat(3, minmax(0, 1fr))",
+                "gap": "16px",
+                "alignItems": "stretch",
+            },
+            children=[
+                _chart_card("chart-fca-outrights", height=360),
+                _chart_card("chart-fca-spreads", height=360),
+                _chart_card("chart-fca-butterflies", height=360),
+            ],
+        ),
+    ]
+
+
+def _table_tab_content() -> list:
+    return [
+        _card(
+            children=[
+                html.Div(id="fca-product-table"),
+            ],
+            style={"minHeight": "220px"},
+        )
+    ]
+
+
 def build_layout() -> html.Div:
     return html.Div(
         style={
@@ -58,11 +156,10 @@ def build_layout() -> html.Div:
             dcc.Store(id="data-loaded", data=False),
             dcc.Interval(id="initial-load", interval=300, n_intervals=0, max_intervals=1),
             dcc.Interval(id="scheduler-status-interval", interval=5000, n_intervals=0),
+            dcc.Interval(id="fca-live-interval", interval=1000, n_intervals=0),
 
-            # Accent top strip
             html.Div(style={"height": "3px", "backgroundColor": COLORS["accent"]}),
 
-            # Header
             dmc.Group(
                 justify="space-between",
                 align="center",
@@ -84,8 +181,12 @@ def build_layout() -> html.Div:
                         ),
                     ]),
                     dmc.Group(gap="sm", children=[
-                        dmc.Loader(id="refresh-loader", size="sm", color="orange",
-                                   style={"display": "none"}),
+                        dmc.Loader(
+                            id="refresh-loader",
+                            size="sm",
+                            color="orange",
+                            style={"display": "none"},
+                        ),
                         dmc.Button(
                             "Refresh Data",
                             id="refresh-btn",
@@ -102,76 +203,23 @@ def build_layout() -> html.Div:
             html.Div(
                 style={"padding": "16px"},
                 children=[
-                    # Signal Bar — 6 metric cards
-                    dmc.Grid(gutter="md", children=[
-                        dmc.GridCol(_metric_card("metric-cushing"), span=2),
-                        dmc.GridCol(_metric_card("metric-production"), span=2),
-                        dmc.GridCol(_metric_card("metric-refinery"), span=2),
-                        dmc.GridCol(_metric_card("metric-exports"), span=2),
-                        dmc.GridCol(_metric_card("metric-spread"), span=2),
-                        dmc.GridCol(_metric_card("metric-zscore"), span=2),
-                    ]),
-
-                    dmc.Space(h="md"),
-
-                    # Row 2: Inventory & Production — 3 cols
-                    dmc.Grid(gutter="md", children=[
-                        dmc.GridCol(_chart_card("chart-cushing-5yr"), span=4),
-                        dmc.GridCol(_chart_card("chart-cushing-wow"), span=4),
-                        dmc.GridCol(_chart_card("chart-production"), span=4),
-                    ]),
-
-                    dmc.Space(h="md"),
-
-                    # Row 3: Refinery, Exports, Crack, Demand — 4 cols
-                    dmc.Grid(gutter="md", children=[
-                        dmc.GridCol(_chart_card("chart-refinery"), span=3),
-                        dmc.GridCol(_chart_card("chart-exports"), span=3),
-                        dmc.GridCol(_chart_card("chart-crack"), span=3),
-                        dmc.GridCol(_chart_card("chart-demand"), span=3),
-                    ]),
-
-                    dmc.Space(h="md"),
-
-                    # Row 4: CL-CO spread analysis — 2 cols
-                    dmc.Grid(gutter="md", children=[
-                        dmc.GridCol(_chart_card("chart-spread-seasonal", height=340), span=6),
-                        dmc.GridCol(
-                            html.Div(children=[
-                                _chart_card("chart-zscore", height=260),
-                                dmc.Space(h="xs"),
-                                dmc.Card(
-                                    withBorder=True, radius="md", padding="sm",
-                                    style={
-                                        "backgroundColor": COLORS["surface"],
-                                        "borderColor": COLORS["border"],
-                                    },
-                                    children=[
-                                        dmc.Text(
-                                            "Current z-score position",
-                                            c=COLORS["text_muted"], size="xs", mb=4,
-                                        ),
-                                        html.Div(id="zscore-gauge"),
-                                    ],
-                                ),
-                            ]),
-                            span=6,
-                        ),
-                    ]),
-
-                    dmc.Space(h="md"),
-
-                    # Row 5: Curve structure — 2 cols
-                    dmc.Grid(gutter="md", children=[
-                        dmc.GridCol(_chart_card("chart-calendar-spreads", height=260), span=6),
-                        dmc.GridCol(_chart_card("chart-clco-expiry", height=260), span=6),
-                    ]),
-
-                    dmc.Space(h="md"),
-
-                    # Row 6: Trade signal summary panel — full width
-                    html.Div(id="signal-panel"),
-
+                    dmc.Tabs(
+                        value="overview",
+                        variant="outline",
+                        color="orange",
+                        children=[
+                            dmc.TabsList(
+                                children=[
+                                    dmc.TabsTab("Overview", value="overview"),
+                                    dmc.TabsTab("FCA", value="fca"),
+                                    dmc.TabsTab("Table", value="table"),
+                                ]
+                            ),
+                            dmc.TabsPanel(_overview_tab_content(), value="overview", pt="md"),
+                            dmc.TabsPanel(_fca_tab_content(), value="fca", pt="md"),
+                            dmc.TabsPanel(_table_tab_content(), value="table", pt="md"),
+                        ],
+                    ),
                     dmc.Space(h="xl"),
                 ],
             ),

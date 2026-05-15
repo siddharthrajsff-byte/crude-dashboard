@@ -1,0 +1,4 @@
+lightstreamer_service/
+
+.env
+*.tmp

@@ -118,3 +118,39 @@ def cushing_wow(df: pd.DataFrame, lookback_weeks: int = 26) -> go.Figure:
         )
     )
     return fig
+
+
+def spr_stocks(df: pd.DataFrame, weeks: int = 104) -> go.Figure:
+    if df.empty or "spr_stocks_kbbl" not in df.columns:
+        return empty_figure()
+
+    work = df.sort_values("date").tail(weeks).copy()
+    work["rolling4"] = work["spr_stocks_kbbl"].rolling(4, min_periods=2).mean()
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=work["date"],
+            y=work["spr_stocks_kbbl"],
+            mode="lines",
+            line=dict(color=COLORS["accent"], width=2.5),
+            name="Weekly",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=work["date"],
+            y=work["rolling4"],
+            mode="lines",
+            line=dict(color=COLORS["text_muted"], dash="dash", width=1.5),
+            name="4W avg",
+        )
+    )
+    fig.update_layout(
+        **base_layout(
+            title=dict(text="SPR stocks", font=dict(size=13)),
+            xaxis=dict(title="", gridcolor=COLORS["border"]),
+            yaxis=dict(title="kbbl", gridcolor=COLORS["border"]),
+        )
+    )
+    return fig

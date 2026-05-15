@@ -1,0 +1,13 @@
+{
+  "latest": {
+    "805633113204488608": {
+      "instrumentId": "805633113204488608",
+      "bidPrice": 105.37,
+      "askPrice": 105.41,
+      "tradePrice": 105.38,
+      "settlementPrice": 105.63,
+      "exchangeTimeNs": 1778756246675344000,
+      "state": "O"
+    }
+  }
+}

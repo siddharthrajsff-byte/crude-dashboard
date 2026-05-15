@@ -11,8 +11,11 @@ from dash import Input, Output, State, callback, ctx, html, no_update
 from compute.curve import compute_calendar_spreads, compute_clco_by_expiry
 from compute.signals import compute_trade_signals
 from dashboard.charts import exports as exports_chart
+from dashboard.charts import fca as fca_chart
 from dashboard.charts import inventory, production, refinery, spread
 from dashboard.charts.signals import signal_panel
+from dashboard.fca.config import GROUP_LABELS, load_fca_instruments, load_product_instruments, table_types
+from dashboard.fca.market_data import build_curve_frame, build_product_table_frame, load_latest_snapshots
 from dashboard.theme import COLORS
 from db.query import data_exists, load_all
 from ingestion.fetch_all import fetch_all_now, last_updated
@@ -253,6 +256,123 @@ def render_scheduler_status(_n_intervals):
 
 
 @callback(
+    Output("metric-fca-outrights", "children"),
+    Output("metric-fca-spreads", "children"),
+    Output("metric-fca-butterflies", "children"),
+    Output("chart-fca-outrights", "figure"),
+    Output("chart-fca-spreads", "figure"),
+    Output("chart-fca-butterflies", "figure"),
+    Output("fca-product-table", "children"),
+    Input("fca-live-interval", "n_intervals"),
+    prevent_initial_call=False,
+)
+def render_fca(_n_intervals):
+    try:
+        groups = load_fca_instruments()
+        product_instruments = load_product_instruments()
+        snapshots = load_latest_snapshots()
+    except Exception as exc:
+        logger.exception("FCA refresh failed: %s", exc)
+        groups = {group: [] for group in GROUP_LABELS}
+        product_instruments = []
+        snapshots = {}
+
+    frames = {
+        group: build_curve_frame(instruments, snapshots)
+        for group, instruments in groups.items()
+    }
+
+    return (
+        _metric_fca("Outrights", frames["outrights"]),
+        _metric_fca("Spreads", frames["spreads"]),
+        _metric_fca("Butterflies", frames["butterflies"]),
+        fca_chart.curve_line(frames["outrights"], "Forward outrights"),
+        fca_chart.curve_line(frames["spreads"], "Forward spreads"),
+        fca_chart.curve_line(frames["butterflies"], "Forward butterflies"),
+        _product_table(
+            build_product_table_frame(product_instruments, snapshots, table_types(product_instruments)),
+            table_types(product_instruments),
+        ),
+    )
+
+
+def _metric_fca(label: str, df: pd.DataFrame) -> list:
+    if df.empty:
+        return _metric_card_content(label, "0", "Not configured")
+
+    live = df.dropna(subset=["price"])
+    if live.empty:
+        return _metric_card_content(label, f"{len(df)}", "Waiting for L1")
+
+    latest = live.iloc[-1]
+    return _metric_card_content(
+        label,
+        f"{len(live)}/{len(df)} live",
+        f"{latest['tenor']} {float(latest['price']):.3f}",
+    )
+
+
+def _product_table(df: pd.DataFrame, instrument_types: tuple[str, ...]) -> html.Div:
+    if df.empty:
+        return html.Div(
+            "No products configured",
+            style={"color": COLORS["text_muted"], "fontSize": "13px"},
+        )
+
+    header_style = {
+        "padding": "10px 12px",
+        "color": COLORS["text_muted"],
+        "fontSize": "12px",
+        "textTransform": "uppercase",
+        "borderBottom": f"1px solid {COLORS['border']}",
+        "textAlign": "left",
+    }
+    cell_style = {
+        "padding": "12px",
+        "color": COLORS["text"],
+        "fontSize": "13px",
+        "borderBottom": f"1px solid {COLORS['border']}",
+        "whiteSpace": "nowrap",
+    }
+
+    tables = []
+    for product_name, product_df in df.groupby("product_name", sort=False):
+        columns = ("label", *instrument_types)
+        tables.append(
+            html.Table(
+                style={
+                    "width": "100%",
+                    "borderCollapse": "collapse",
+                    "tableLayout": "fixed",
+                    "marginBottom": "18px",
+                },
+                children=[
+                    html.Thead(
+                        html.Tr(
+                            [
+                                html.Th(product_name, style=header_style),
+                                *[
+                                    html.Th(instrument_type, style=header_style)
+                                    for instrument_type in instrument_types
+                                ],
+                            ]
+                        )
+                    ),
+                    html.Tbody([
+                        html.Tr([
+                            html.Td(row.get(column) or "-", style=cell_style)
+                            for column in columns
+                        ])
+                        for row in product_df.to_dict("records")
+                    ]),
+                ],
+            )
+        )
+
+    return html.Div(style={"overflowX": "auto"}, children=tables)
+
+
+@callback(
     Output("data-loaded", "data"),
     Output("last-updated", "children"),
     Input("initial-load", "n_intervals"),
@@ -293,6 +413,8 @@ def load_or_refresh(_n_intervals, n_clicks, loaded):
     Output("chart-exports", "figure"),
     Output("chart-crack", "figure"),
     Output("chart-demand", "figure"),
+    Output("chart-spr-stocks", "figure"),
+    Output("chart-crude-imports", "figure"),
     Output("chart-spread-seasonal", "figure"),
     Output("chart-zscore", "figure"),
     Output("chart-calendar-spreads", "figure"),
@@ -308,6 +430,8 @@ def render_all(loaded):
     prod = data["us_production"]
     ref = data["refinery_util"]
     exp = data["crude_exports"]
+    imports_df = data["crude_imports"]
+    spr_stocks_df = data["spr_stocks"]
     spr = data["spread"]
     zsc = data["spread_zscore"]
     bands = data["seasonal_bands"]
@@ -328,6 +452,8 @@ def render_all(loaded):
     fig_exports = exports_chart.exports(exp)
     fig_crack = refinery.crack_spread_placeholder()
     fig_demand = refinery.implied_demand(ref)
+    fig_spr_stocks = inventory.spr_stocks(spr_stocks_df)
+    fig_crude_imports = exports_chart.imports(imports_df)
     fig_spread_seasonal = spread.spread_vs_seasonal(spr, bands)
     fig_zscore = spread.zscore(zsc)
     fig_calendar = spread.calendar_spreads_bar(compute_calendar_spreads(None))
@@ -349,6 +475,7 @@ def render_all(loaded):
         exports_card, spread_card, zscore_card,
         fig_cushing_5yr, fig_cushing_wow, fig_production,
         fig_refinery, fig_exports, fig_crack, fig_demand,
+        fig_spr_stocks, fig_crude_imports,
         fig_spread_seasonal, fig_zscore,
         fig_calendar, fig_clco_expiry,
         gauge, panel,

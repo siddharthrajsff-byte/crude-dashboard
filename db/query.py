@@ -37,6 +37,14 @@ def get_exports() -> pd.DataFrame:
     return _query_parquet(RAW_DIR / "crude_exports.parquet")
 
 
+def get_imports() -> pd.DataFrame:
+    return _query_parquet(RAW_DIR / "crude_imports.parquet")
+
+
+def get_spr_stocks() -> pd.DataFrame:
+    return _query_parquet(RAW_DIR / "spr_stocks.parquet")
+
+
 def get_spread() -> pd.DataFrame:
     return _query_parquet(RAW_DIR / "cl_co_spread.parquet")
 
@@ -59,6 +67,8 @@ def load_all() -> dict[str, pd.DataFrame]:
         "us_production": get_production(),
         "refinery_util": get_refinery_util(),
         "crude_exports": get_exports(),
+        "crude_imports": get_imports(),
+        "spr_stocks": get_spr_stocks(),
         "spread": get_spread(),
         "spread_zscore": get_zscore(),
         "seasonal_bands": get_seasonal_bands(),

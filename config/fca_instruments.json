@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "products": [
+    {
+      "productName": "Brent",
+      "instruments": [
+        {
+          "tenor": "N26",
+          "instrument_id": "805633113204488608",
+          "instrumentType": "OUTRIGHT",
+          "label": "N26",
+          "enabled": true
+        },
+        {
+          "tenor": "Q26",
+          "instrument_id": "18442934843091916954",
+          "instrumentType": "OUTRIGHT",
+          "label": "Q26",
+          "enabled": true
+        },
+        {
+          "tenor": "U26",
+          "instrument_id": "17251438917134672331",
+          "instrumentType": "OUTRIGHT",
+          "label": "U26",
+          "enabled": true
+        },
+        {
+          "tenor": "V26",
+          "instrument_id": "7173146599809127134",
+          "instrumentType": "OUTRIGHT",
+          "label": "V26",
+          "enabled": true
+        },
+        {
+          "tenor": "X26",
+          "instrument_id": "9341335512644243006",
+          "instrumentType": "OUTRIGHT",
+          "label": "X26",
+          "enabled": true
+        },
+        {
+          "tenor": "Z26",
+          "instrument_id": "9181805969070617581",
+          "instrumentType": "OUTRIGHT",
+          "label": "Z26",
+          "enabled": true
+        },
+        {
+          "tenor": "N26",
+          "instrument_id": "9168260378464932062",
+          "instrumentType": "1MS",
+          "label": "N26",
+          "enabled": true
+        },
+        {
+          "tenor": "Q26",
+          "instrument_id": "10122838698664355590",
+          "instrumentType": "1MS",
+          "label": "Q26",
+          "enabled": true
+        },
+        {
+          "tenor": "U26",
+          "instrument_id": "6987460243378758477",
+          "instrumentType": "1MS",
+          "label": "U26",
+          "enabled": true
+        },
+        {
+          "tenor": "V26",
+          "instrument_id": "7379742546910687603",
+          "instrumentType": "1MS",
+          "label": "V26",
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}
